@@ -1,23 +1,20 @@
 """Test Agent creation and execution basic functionality."""
 
-import hashlib
 import json
-import os
-import tempfile
 from concurrent.futures import Future
-from unittest import mock
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 
 import pydantic_core
 import pytest
 
+from typing import Type, List
+from pydantic import BaseModel, Field
+
 from crewai.agent import Agent
-from crewai.agents import CacheHandler
 from crewai.agents.cache import CacheHandler
-from crewai.agents.crew_agent_executor import CrewAgentExecutor
 from crewai.crew import Crew
 from crewai.crews.crew_output import CrewOutput
-from crewai.flow import Flow, listen, start
+from crewai.flow import Flow, start
 from crewai.knowledge.source.string_knowledge_source import StringKnowledgeSource
 from crewai.llm import LLM
 from crewai.memory.contextual.contextual_memory import ContextualMemory
@@ -42,6 +39,13 @@ from crewai.utilities.events.crew_events import (
 from crewai.utilities.events.event_listener import EventListener
 from crewai.utilities.rpm_controller import RPMController
 from crewai.utilities.task_output_storage_handler import TaskOutputStorageHandler
+
+# Imports moved to module level to satisfy linters (E402) and avoid duplicate/unused imports
+from crewai.tools import BaseTool, tool
+from crewai_tools import CodeInterpreterTool
+from crewai.tools.agent_tools.add_image_tool import AddImageTool
+from crewai.project import CrewBase, agent, before_kickoff, crew, task
+from crewai.agents.agent_builder.base_agent import BaseAgent
 
 
 @pytest.fixture
@@ -566,12 +570,6 @@ def test_crew_with_delegating_agents(ceo, writer):
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_crew_with_delegating_agents_should_not_override_task_tools(ceo, writer):
-    from typing import Type
-
-    from pydantic import BaseModel, Field
-
-    from crewai.tools import BaseTool
-
     class TestToolInput(BaseModel):
         """Input schema for TestTool."""
 
@@ -618,22 +616,16 @@ def test_crew_with_delegating_agents_should_not_override_task_tools(ceo, writer)
         _, kwargs = mock_execute_sync.call_args
         tools = kwargs["tools"]
 
-        assert any(
-            isinstance(tool, TestTool) for tool in tools
-        ), "TestTool should be present"
-        assert any(
-            "delegate" in tool.name.lower() for tool in tools
-        ), "Delegation tool should be present"
+        assert any(isinstance(tool, TestTool) for tool in tools), (
+            "TestTool should be present"
+        )
+        assert any("delegate" in tool.name.lower() for tool in tools), (
+            "Delegation tool should be present"
+        )
 
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_crew_with_delegating_agents_should_not_override_agent_tools(ceo, writer):
-    from typing import Type
-
-    from pydantic import BaseModel, Field
-
-    from crewai.tools import BaseTool
-
     class TestToolInput(BaseModel):
         """Input schema for TestTool."""
 
@@ -682,22 +674,16 @@ def test_crew_with_delegating_agents_should_not_override_agent_tools(ceo, writer
         _, kwargs = mock_execute_sync.call_args
         tools = kwargs["tools"]
 
-        assert any(
-            isinstance(tool, TestTool) for tool in new_ceo.tools
-        ), "TestTool should be present"
-        assert any(
-            "delegate" in tool.name.lower() for tool in tools
-        ), "Delegation tool should be present"
+        assert any(isinstance(tool, TestTool) for tool in new_ceo.tools), (
+            "TestTool should be present"
+        )
+        assert any("delegate" in tool.name.lower() for tool in tools), (
+            "Delegation tool should be present"
+        )
 
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_task_tools_override_agent_tools(researcher):
-    from typing import Type
-
-    from pydantic import BaseModel, Field
-
-    from crewai.tools import BaseTool
-
     class TestToolInput(BaseModel):
         """Input schema for TestTool."""
 
@@ -750,11 +736,6 @@ def test_task_tools_override_agent_tools_with_allow_delegation(researcher, write
     """
     Test that task tools override agent tools while preserving delegation tools when allow_delegation=True
     """
-    from typing import Type
-
-    from pydantic import BaseModel, Field
-
-    from crewai.tools import BaseTool
 
     class TestToolInput(BaseModel):
         query: str = Field(..., description="Query to process")
@@ -811,17 +792,17 @@ def test_task_tools_override_agent_tools_with_allow_delegation(researcher, write
         used_tools = kwargs["tools"]
 
         # Confirm AnotherTestTool is present but TestTool is not
-        assert any(
-            isinstance(tool, AnotherTestTool) for tool in used_tools
-        ), "AnotherTestTool should be present"
-        assert not any(
-            isinstance(tool, TestTool) for tool in used_tools
-        ), "TestTool should not be present among used tools"
+        assert any(isinstance(tool, AnotherTestTool) for tool in used_tools), (
+            "AnotherTestTool should be present"
+        )
+        assert not any(isinstance(tool, TestTool) for tool in used_tools), (
+            "TestTool should not be present among used tools"
+        )
 
         # Confirm delegation tool(s) are present
-        assert any(
-            "delegate" in tool.name.lower() for tool in used_tools
-        ), "Delegation tool should be present"
+        assert any("delegate" in tool.name.lower() for tool in used_tools), (
+            "Delegation tool should be present"
+        )
 
     # Finally, make sure the agent's original tools remain unchanged
     assert len(researcher_with_delegation.tools) == 1
@@ -890,10 +871,6 @@ def test_crew_verbose_output(researcher, writer, capsys):
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_cache_hitting_between_agents(researcher, writer, ceo):
-    from unittest.mock import call, patch
-
-    from crewai.tools import tool
-
     @tool
     def multiplier(first_number: int, second_number: int) -> float:
         """Useful for when you need to multiply two numbers together."""
@@ -933,10 +910,6 @@ def test_cache_hitting_between_agents(researcher, writer, ceo):
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_api_calls_throttling(capsys):
-    from unittest.mock import patch
-
-    from crewai.tools import tool
-
     @tool
     def get_final_answer() -> float:
         """Get the final answer but don't give it yet, just re-use this
@@ -1217,8 +1190,6 @@ async def test_crew_async_kickoff():
 @pytest.mark.asyncio
 @pytest.mark.vcr(filter_headers=["authorization"])
 async def test_async_task_execution_call_count(researcher, writer):
-    from unittest.mock import MagicMock, patch
-
     list_ideas = Task(
         description="Give me a list of 5 interesting ideas to explore for na article, what makes them unique and interesting.",
         expected_output="Bullet point list of 5 important events.",
@@ -1405,7 +1376,6 @@ def test_kickoff_for_each_error_handling():
 @pytest.mark.asyncio
 async def test_kickoff_async_basic_functionality_and_output():
     """Tests the basic functionality and output of kickoff_async."""
-    from unittest.mock import patch
 
     inputs = {"topic": "dog"}
 
@@ -1512,8 +1482,6 @@ async def test_async_kickoff_for_each_async_empty_input():
 
 
 def test_set_agents_step_callback():
-    from unittest.mock import patch
-
     researcher_agent = Agent(
         role="Researcher",
         goal="Make the best research and analysis on content about AI and AI agents",
@@ -1542,8 +1510,6 @@ def test_set_agents_step_callback():
 
 
 def test_dont_set_agents_step_callback_if_already_set():
-    from unittest.mock import patch
-
     def agent_callback(_):
         pass
 
@@ -1581,9 +1547,6 @@ def test_dont_set_agents_step_callback_if_already_set():
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_crew_function_calling_llm():
-    from crewai import LLM
-    from crewai.tools import tool
-
     llm = LLM(model="gpt-4o-mini")
 
     @tool
@@ -1613,8 +1576,6 @@ def test_crew_function_calling_llm():
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_task_with_no_arguments():
-    from crewai.tools import tool
-
     @tool
     def return_data() -> str:
         "Useful to get the sales related data"
@@ -1641,8 +1602,6 @@ def test_task_with_no_arguments():
 
 
 def test_code_execution_flag_adds_code_tool_upon_kickoff():
-    from crewai_tools import CodeInterpreterTool
-
     programmer = Agent(
         role="Programmer",
         goal="Write code to solve problems.",
@@ -1674,9 +1633,9 @@ def test_code_execution_flag_adds_code_tool_upon_kickoff():
 
         # Verify that exactly one tool was used and it was a CodeInterpreterTool
         assert len(used_tools) == 1, "Should have exactly one tool"
-        assert isinstance(
-            used_tools[0], CodeInterpreterTool
-        ), "Tool should be CodeInterpreterTool"
+        assert isinstance(used_tools[0], CodeInterpreterTool), (
+            "Tool should be CodeInterpreterTool"
+        )
 
 
 @pytest.mark.vcr(filter_headers=["authorization"])
@@ -1937,8 +1896,6 @@ def test_crew_inputs_interpolate_both_agents_and_tasks():
 
 
 def test_crew_inputs_interpolate_both_agents_and_tasks_diff():
-    from unittest.mock import patch
-
     agent = Agent(
         role="{topic} Researcher",
         goal="Express hot takes on {topic}.",
@@ -2032,8 +1989,6 @@ def test_task_callback_on_crew():
 
 
 def test_task_callback_both_on_task_and_crew():
-    from unittest.mock import MagicMock, patch
-
     mock_callback_on_task = MagicMock()
     mock_callback_on_crew = MagicMock()
 
@@ -2069,8 +2024,6 @@ def test_task_callback_both_on_task_and_crew():
 
 
 def test_task_same_callback_both_on_task_and_crew():
-    from unittest.mock import MagicMock, patch
-
     mock_callback = MagicMock()
 
     researcher_agent = Agent(
@@ -2105,10 +2058,6 @@ def test_task_same_callback_both_on_task_and_crew():
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_tools_with_custom_caching():
-    from unittest.mock import patch
-
-    from crewai.tools import tool
-
     @tool
     def multiplcation_tool(first_number: int, second_number: int) -> int:
         """Useful for when you need to multiply two numbers together."""
@@ -2386,8 +2335,6 @@ def test_multiple_conditional_tasks(researcher, writer):
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_using_contextual_memory():
-    from unittest.mock import patch
-
     math_researcher = Agent(
         role="Researcher",
         goal="You research about math.",
@@ -2414,8 +2361,6 @@ def test_using_contextual_memory():
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_using_contextual_memory_with_long_term_memory():
-    from unittest.mock import patch
-
     math_researcher = Agent(
         role="Researcher",
         goal="You research about math.",
@@ -2443,8 +2388,6 @@ def test_using_contextual_memory_with_long_term_memory():
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_warning_long_term_memory_without_entity_memory():
-    from unittest.mock import patch
-
     math_researcher = Agent(
         role="Researcher",
         goal="You research about math.",
@@ -2670,8 +2613,6 @@ def test_crew_output_file_validation_failures():
 
 
 def test_manager_agent(researcher, writer):
-    from unittest.mock import patch
-
     task = Task(
         description="Come up with a list of 5 interesting ideas to explore for an article, then write one amazing paragraph highlight for each idea that showcases how good an article about this topic could be. Return the list of ideas with their paragraph and your notes.",
         expected_output="5 bullet points with a paragraph for each idea.",
@@ -2730,8 +2671,6 @@ def test_manager_agent_in_agents_raises_exception(researcher, writer):
 
 
 def test_manager_agent_with_tools_raises_exception(researcher, writer):
-    from crewai.tools import tool
-
     @tool
     def testing_tool(first_number: int, second_number: int) -> int:
         """Useful for when you need to multiply two numbers together."""
@@ -3664,21 +3603,15 @@ def test_fetch_inputs():
     expected_placeholders = {"role_detail", "topic", "field"}
     actual_placeholders = crew.fetch_inputs()
 
-    assert (
-        actual_placeholders == expected_placeholders
-    ), f"Expected {expected_placeholders}, but got {actual_placeholders}"
+    assert actual_placeholders == expected_placeholders, (
+        f"Expected {expected_placeholders}, but got {actual_placeholders}"
+    )
 
 
 def test_task_tools_preserve_code_execution_tools():
     """
     Test that task tools don't override code execution tools when allow_code_execution=True
     """
-    from typing import Type
-
-    from crewai_tools import CodeInterpreterTool
-    from pydantic import BaseModel, Field
-
-    from crewai.tools import BaseTool
 
     class TestToolInput(BaseModel):
         """Input schema for TestTool."""
@@ -3739,20 +3672,20 @@ def test_task_tools_preserve_code_execution_tools():
         used_tools = kwargs["tools"]
 
         # Verify all expected tools are present
-        assert any(
-            isinstance(tool, TestTool) for tool in used_tools
-        ), "Task's TestTool should be present"
-        assert any(
-            isinstance(tool, CodeInterpreterTool) for tool in used_tools
-        ), "CodeInterpreterTool should be present"
-        assert any(
-            "delegate" in tool.name.lower() for tool in used_tools
-        ), "Delegation tool should be present"
+        assert any(isinstance(tool, TestTool) for tool in used_tools), (
+            "Task's TestTool should be present"
+        )
+        assert any(isinstance(tool, CodeInterpreterTool) for tool in used_tools), (
+            "CodeInterpreterTool should be present"
+        )
+        assert any("delegate" in tool.name.lower() for tool in used_tools), (
+            "Delegation tool should be present"
+        )
 
         # Verify the total number of tools (TestTool + CodeInterpreter + 2 delegation tools)
-        assert (
-            len(used_tools) == 4
-        ), "Should have TestTool, CodeInterpreter, and 2 delegation tools"
+        assert len(used_tools) == 4, (
+            "Should have TestTool, CodeInterpreter, and 2 delegation tools"
+        )
 
 
 @pytest.mark.vcr(filter_headers=["authorization"])
@@ -3760,7 +3693,6 @@ def test_multimodal_flag_adds_multimodal_tools():
     """
     Test that an agent with multimodal=True automatically has multimodal tools added to the task execution.
     """
-    from crewai.tools.agent_tools.add_image_tool import AddImageTool
 
     # Create an agent that supports multimodal
     multimodal_agent = Agent(
@@ -3796,9 +3728,9 @@ def test_multimodal_flag_adds_multimodal_tools():
         used_tools = kwargs["tools"]
 
         # Check that the multimodal tool was added
-        assert any(
-            isinstance(tool, AddImageTool) for tool in used_tools
-        ), "AddImageTool should be present when agent is multimodal"
+        assert any(isinstance(tool, AddImageTool) for tool in used_tools), (
+            "AddImageTool should be present when agent is multimodal"
+        )
 
         # Verify we have exactly one tool (just the AddImageTool)
         assert len(used_tools) == 1, "Should only have the AddImageTool"
@@ -4062,9 +3994,9 @@ def test_crew_guardrail_feedback_in_context():
     assert len(execution_contexts) > 1, "Task should have been executed multiple times"
 
     # Verify that the second execution included the guardrail feedback
-    assert (
-        "Output must contain the keyword 'IMPORTANT'" in execution_contexts[1]
-    ), "Guardrail feedback should be included in retry context"
+    assert "Output must contain the keyword 'IMPORTANT'" in execution_contexts[1], (
+        "Guardrail feedback should be included in retry context"
+    )
 
     # Verify final output meets guardrail requirements
     assert "IMPORTANT" in result.raw, "Final output should contain required keyword"
@@ -4075,15 +4007,8 @@ def test_crew_guardrail_feedback_in_context():
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_before_kickoff_callback():
-    from crewai.project import CrewBase
-
     @CrewBase
     class TestCrewClass:
-        from typing import List
-
-        from crewai.agents.agent_builder.base_agent import BaseAgent
-        from crewai.project import CrewBase, agent, before_kickoff, crew, task
-
         agents: List[BaseAgent]
         tasks: List[Task]
 
@@ -4140,12 +4065,8 @@ def test_before_kickoff_callback():
 
 @pytest.mark.vcr(filter_headers=["authorization"])
 def test_before_kickoff_without_inputs():
-    from crewai.project import CrewBase, agent, before_kickoff, task
-
     @CrewBase
     class TestCrewClass:
-        from crewai.project import crew
-
         agents_config = None
         tasks_config = None
 
@@ -4281,46 +4202,46 @@ def test_crew_copy_with_memory():
     try:
         crew_copy = crew.copy()
 
-        assert hasattr(
-            crew_copy, "_short_term_memory"
-        ), "Copied crew should have _short_term_memory"
-        assert (
-            crew_copy._short_term_memory is not None
-        ), "Copied _short_term_memory should not be None"
-        assert (
-            id(crew_copy._short_term_memory) != original_short_term_id
-        ), "Copied _short_term_memory should be a new object"
+        assert hasattr(crew_copy, "_short_term_memory"), (
+            "Copied crew should have _short_term_memory"
+        )
+        assert crew_copy._short_term_memory is not None, (
+            "Copied _short_term_memory should not be None"
+        )
+        assert id(crew_copy._short_term_memory) != original_short_term_id, (
+            "Copied _short_term_memory should be a new object"
+        )
 
-        assert hasattr(
-            crew_copy, "_long_term_memory"
-        ), "Copied crew should have _long_term_memory"
-        assert (
-            crew_copy._long_term_memory is not None
-        ), "Copied _long_term_memory should not be None"
-        assert (
-            id(crew_copy._long_term_memory) != original_long_term_id
-        ), "Copied _long_term_memory should be a new object"
+        assert hasattr(crew_copy, "_long_term_memory"), (
+            "Copied crew should have _long_term_memory"
+        )
+        assert crew_copy._long_term_memory is not None, (
+            "Copied _long_term_memory should not be None"
+        )
+        assert id(crew_copy._long_term_memory) != original_long_term_id, (
+            "Copied _long_term_memory should be a new object"
+        )
 
-        assert hasattr(
-            crew_copy, "_entity_memory"
-        ), "Copied crew should have _entity_memory"
-        assert (
-            crew_copy._entity_memory is not None
-        ), "Copied _entity_memory should not be None"
-        assert (
-            id(crew_copy._entity_memory) != original_entity_id
-        ), "Copied _entity_memory should be a new object"
+        assert hasattr(crew_copy, "_entity_memory"), (
+            "Copied crew should have _entity_memory"
+        )
+        assert crew_copy._entity_memory is not None, (
+            "Copied _entity_memory should not be None"
+        )
+        assert id(crew_copy._entity_memory) != original_entity_id, (
+            "Copied _entity_memory should be a new object"
+        )
 
         if original_external_id:
-            assert hasattr(
-                crew_copy, "_external_memory"
-            ), "Copied crew should have _external_memory"
-            assert (
-                crew_copy._external_memory is not None
-            ), "Copied _external_memory should not be None"
-            assert (
-                id(crew_copy._external_memory) != original_external_id
-            ), "Copied _external_memory should be a new object"
+            assert hasattr(crew_copy, "_external_memory"), (
+                "Copied crew should have _external_memory"
+            )
+            assert crew_copy._external_memory is not None, (
+                "Copied _external_memory should not be None"
+            )
+            assert id(crew_copy._external_memory) != original_external_id, (
+                "Copied _external_memory should be a new object"
+            )
         else:
             assert (
                 not hasattr(crew_copy, "_external_memory")
@@ -4328,15 +4249,15 @@ def test_crew_copy_with_memory():
             ), "Copied _external_memory should be None if not originally present"
 
         if original_user_id:
-            assert hasattr(
-                crew_copy, "_user_memory"
-            ), "Copied crew should have _user_memory"
-            assert (
-                crew_copy._user_memory is not None
-            ), "Copied _user_memory should not be None"
-            assert (
-                id(crew_copy._user_memory) != original_user_id
-            ), "Copied _user_memory should be a new object"
+            assert hasattr(crew_copy, "_user_memory"), (
+                "Copied crew should have _user_memory"
+            )
+            assert crew_copy._user_memory is not None, (
+                "Copied _user_memory should not be None"
+            )
+            assert id(crew_copy._user_memory) != original_user_id, (
+                "Copied _user_memory should be a new object"
+            )
         else:
             assert (
                 not hasattr(crew_copy, "_user_memory") or crew_copy._user_memory is None

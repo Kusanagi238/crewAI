@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Union
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,7 +19,9 @@ class AddImageTool(BaseTool):
     """Tool for adding images to the content"""
 
     name: str = Field(default_factory=lambda: i18n.tools("add_image")["name"])  # type: ignore
-    description: str = Field(default_factory=lambda: i18n.tools("add_image")["description"])  # type: ignore
+    description: str = Field(
+        default_factory=lambda: i18n.tools("add_image")["description"]
+    )  # type: ignore
     args_schema: type[BaseModel] = AddImageToolSchema
 
     def _run(
