@@ -231,6 +231,13 @@ class Task(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def process_model_config(cls, values):
+        # Only attempt to process when values behaves like a mapping.
+        # Pydantic may pass non-mapping values (e.g. a string) to a before-model
+        # validator; in those cases forward the value unchanged so Pydantic can
+        # raise an appropriate ValidationError instead of causing an
+        # AttributeError inside process_config.
+        if not hasattr(values, "get"):
+            return values
         return process_config(values, cls)
 
     @model_validator(mode="after")
@@ -390,8 +397,22 @@ class Task(BaseModel):
         future: Future[TaskOutput],
     ) -> None:
         """Execute the task asynchronously with context handling."""
-        result = self._execute_core(agent, context, tools)
-        future.set_result(result)
+        try:
+            result = self._execute_core(agent, context, tools)
+        except Exception as exc:
+            # Ensure exceptions are set on the future so they do not escape
+            # into the background thread and trigger unhandled thread
+            # exceptions reported by pytest.
+            try:
+                future.set_exception(exc)
+            except Exception:
+                # As a last resort, log the exception so it isn't silent.
+                try:
+                    self.logger.exception("Unhandled exception in async task thread")
+                except Exception:
+                    pass
+        else:
+            future.set_result(result)
 
     def _execute_core(
         self,
