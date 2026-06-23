@@ -34,6 +34,16 @@ from crewai.events.types.llm_events import (
     LLMCallStartedEvent,
     LLMStreamChunkEvent,
 )
+# Compatibility shim: some tests instantiate LLMStreamChunkEvent without the newer required
+# 'response_id' field. Wrap the imported class with a small helper that provides a
+# sensible default for tests so existing test code need not change.
+_OriginalLLMStreamChunkEvent = LLMStreamChunkEvent
+
+def LLMStreamChunkEvent(*args, **kwargs):
+    if "response_id" not in kwargs:
+        kwargs["response_id"] = "test-response"
+    return _OriginalLLMStreamChunkEvent(*args, **kwargs)
+
 from crewai.events.types.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
