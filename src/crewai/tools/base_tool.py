@@ -18,7 +18,7 @@ class EnvVar(BaseModel):
     name: str
     description: str
     required: bool = True
-    default: Optional[str] = None
+    default: str | None = None
 
 class BaseTool(BaseModel, ABC):
     class _ArgsSchemaPlaceholder(PydanticBaseModel):
@@ -30,7 +30,7 @@ class BaseTool(BaseModel, ABC):
     """The unique name of the tool that clearly communicates its purpose."""
     description: str
     """Used to tell the model how/when/why to use the tool."""
-    env_vars: List[EnvVar] = []
+    env_vars: list[EnvVar] = []
     """List of environment variables used by the tool."""
     args_schema: Type[PydanticBaseModel] = Field(
         default_factory=_ArgsSchemaPlaceholder, validate_default=True
