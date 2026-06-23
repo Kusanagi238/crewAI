@@ -538,7 +538,7 @@ class Agent(BaseAgent):
         )["output"]
 
     def create_agent_executor(
-        self, tools: Optional[List[BaseTool]] = None, task=None
+        self, tools: Optional[List[BaseTool]] = None, task: Optional[Any] = None
     ) -> None:
         """Create an agent executor for the agent.
 
@@ -657,36 +657,55 @@ class Agent(BaseAgent):
 
         return description
 
-    def _inject_date_to_task(self, task):
-        """Inject the current date into the task description if inject_date is enabled."""
-        if self.inject_date:
-            from datetime import datetime
+    def _inject_date_to_task(self, task: Any) -> None:
+        """Inject the current date into the task description if inject_date is enabled.
 
-            try:
-                valid_format_codes = [
-                    "%Y",
-                    "%m",
-                    "%d",
-                    "%H",
-                    "%M",
-                    "%S",
-                    "%B",
-                    "%b",
-                    "%A",
-                    "%a",
-                ]
-                is_valid = any(code in self.date_format for code in valid_format_codes)
+        The task parameter is typed as Any to allow flexible task-like objects
+        (for example objects with a `description` attribute). The function also
+        guards against missing "description" attribute to avoid attribute errors
+        during runtime and to make static checks clearer.
+        """
+        if not self.inject_date:
+            return
 
-                if not is_valid:
-                    raise ValueError(f"Invalid date format: {self.date_format}")
+        from datetime import datetime
 
-                current_date: str = datetime.now().strftime(self.date_format)
+        try:
+            # Validate that the provided date_format contains at least one valid
+            # strftime directive to avoid silent bad formats.
+            valid_format_codes = [
+                "%Y",
+                "%m",
+                "%d",
+                "%H",
+                "%M",
+                "%S",
+                "%B",
+                "%b",
+                "%A",
+                "%a",
+            ]
+            is_valid = any(code in self.date_format for code in valid_format_codes)
+
+            if not is_valid:
+                raise ValueError(f"Invalid date format: {self.date_format}")
+
+            current_date: str = datetime.now().strftime(self.date_format)
+
+            # Guard if the task does not expose a description attribute
+            if hasattr(task, "description") and isinstance(getattr(task, "description"), str):
                 task.description += f"\n\nCurrent Date: {current_date}"
-            except Exception as e:
-                if hasattr(self, "_logger"):
-                    self._logger.log("warning", f"Failed to inject date: {str(e)}")
-                else:
-                    print(f"Warning: Failed to inject date: {str(e)}")
+            else:
+                # If task has no description, attempt to set it if possible
+                try:
+                    setattr(task, "description", f"Current Date: {current_date}")
+                except Exception:
+                    raise TypeError("Provided task object does not support a 'description' attribute")
+        except Exception as e:
+            if hasattr(self, "_logger"):
+                self._logger.log("warning", f"Failed to inject date: {str(e)}")
+            else:
+                print(f"Warning: Failed to inject date: {str(e)}")
 
     def _validate_docker_installation(self) -> None:
         """Check if Docker is installed and running."""

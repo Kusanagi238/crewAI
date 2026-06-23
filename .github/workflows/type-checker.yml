@@ -1,6 +1,6 @@
 name: Run Type Checks
 
-on: [pull_request]
+on: push
 
 permissions:
   contents: write
@@ -10,17 +10,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11.9"
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.11.9
 
-      - name: Install Requirements
-        run: |
-          pip install mypy
+    - name: Install Requirements
+      run: |
+        pip install mypy
 
-      - name: Run type checks
-        run: mypy src
+    - name: Run type checks
+      run: mypy src
