@@ -378,10 +378,14 @@ class EventListener(BaseEventListener):
 
         @crewai_event_bus.on(LLMGuardrailStartedEvent)
         def on_llm_guardrail_started(source, event: LLMGuardrailStartedEvent):
+            # Ensure guardrail is treated as a string before slicing/len operations
+            guardrail_value = (
+                event.guardrail
+                if isinstance(event.guardrail, str)
+                else getattr(event.guardrail, "__name__", str(event.guardrail))
+            )
             guardrail_name = (
-                event.guardrail[:50] + "..."
-                if len(event.guardrail) > 50
-                else event.guardrail
+                guardrail_value[:50] + "..." if len(guardrail_value) > 50 else guardrail_value
             )
 
             self.formatter.handle_guardrail_started(guardrail_name, event.retry_count)

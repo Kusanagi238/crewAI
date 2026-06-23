@@ -1,7 +1,18 @@
 import shutil
 import subprocess
 import time
-from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+)
 
 from pydantic import Field, InstanceOf, PrivateAttr, model_validator
 
@@ -162,7 +173,7 @@ class Agent(BaseAgent):
     )
     guardrail: Optional[Union[Callable[[Any], Tuple[bool, Any]], str]] = Field(
         default=None,
-        description="Function or string description of a guardrail to validate agent output"
+        description="Function or string description of a guardrail to validate agent output",
     )
     guardrail_max_retries: int = Field(
         default=3, description="Maximum number of retries when guardrail fails"
@@ -657,8 +668,12 @@ class Agent(BaseAgent):
 
         return description
 
-    def _inject_date_to_task(self, task):
-        """Inject the current date into the task description if inject_date is enabled."""
+    def _inject_date_to_task(self, task: "Any") -> None:
+        """Inject the current date into the task description if inject_date is enabled.
+
+        The task parameter is typed as Any to satisfy static type checkers; the
+        method will safely handle missing or non-string description attributes.
+        """
         if self.inject_date:
             from datetime import datetime
 
@@ -675,13 +690,21 @@ class Agent(BaseAgent):
                     "%A",
                     "%a",
                 ]
-                is_valid = any(code in self.date_format for code in valid_format_codes)
+                # Ensure date_format is treated as a string for the membership checks
+                date_format_str = str(self.date_format)
+                is_valid = any(code in date_format_str for code in valid_format_codes)
 
                 if not is_valid:
                     raise ValueError(f"Invalid date format: {self.date_format}")
 
-                current_date: str = datetime.now().strftime(self.date_format)
-                task.description += f"\n\nCurrent Date: {current_date}"
+                current_date: str = datetime.now().strftime(date_format_str)
+                # Safely append or set the description on the task object
+                if hasattr(task, "description") and isinstance(
+                    getattr(task, "description"), str
+                ):
+                    task.description += f"\n\nCurrent Date: {current_date}"
+                else:
+                    setattr(task, "description", f"Current Date: {current_date}")
             except Exception as e:
                 if hasattr(self, "_logger"):
                     self._logger.log("warning", f"Failed to inject date: {str(e)}")
