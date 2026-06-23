@@ -822,8 +822,8 @@ def test_validate_model_in_constants():
     assert LLM._validate_model_in_constants("gpt-future-6", "openai") is False
 
     # Anthropic models
-    assert LLM._validate_model_in_constants("claude-opus-4-0", "claude") is True
-    assert LLM._validate_model_in_constants("claude-future-5", "claude") is False
+    assert LLM._validate_model_in_constants("claude-opus-4-0", "anthropic") is True
+    assert LLM._validate_model_in_constants("claude-future-5", "anthropic") is False
 
     # Gemini models
     assert LLM._validate_model_in_constants("gemini-2.5-pro", "gemini") is True

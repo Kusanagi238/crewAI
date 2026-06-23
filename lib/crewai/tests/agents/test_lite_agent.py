@@ -70,8 +70,9 @@ class ResearchResult(BaseModel):
     sources: list[str] = Field(description="List of sources used")
 
 
-@pytest.mark.vcr(filter_headers=["authorization"])
+vcr = getattr(pytest.mark, "vcr", lambda *args, **kwargs: (lambda f: f))
 @pytest.mark.parametrize("verbose", [True, False])
+@vcr(filter_headers=["authorization"])
 def test_lite_agent_created_with_correct_parameters(monkeypatch, verbose):
     """Test that LiteAgent is created with the correct parameters when Agent.kickoff() is called."""
     # Create a test agent with specific parameters
@@ -213,8 +214,6 @@ def test_lite_agent_structured_output():
     assert "tokyo" in output.summary.lower() or "population" in output.summary.lower()
 
     assert result.usage_metrics is not None
-
-    return result
 
 
 @pytest.mark.vcr(filter_headers=["authorization"])

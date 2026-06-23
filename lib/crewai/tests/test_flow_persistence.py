@@ -46,7 +46,7 @@ def test_structured_state_persistence(tmp_path):
     persistence = SQLiteFlowPersistence(db_path)
 
     class StructuredFlow(Flow[TestState]):
-        initial_state = TestState
+        initial_state = TestState()
 
         @start()
         @persist(persistence)
@@ -219,13 +219,13 @@ def test_persistence_with_base_model(tmp_path):
 
     class State(FlowState):
         latest_message: Message | None = None
-        history: List[Message] = []
+        history: List[Message] | None = None
 
-    @persist(persistence)
     class BaseModelFlow(Flow[State]):
         initial_state = State(latest_message=None, history=[])
 
         @start()
+        @persist(persistence)
         def init_step(self):
             self.state.latest_message = Message(
                 role="user", type="text", content="Hello, World!"

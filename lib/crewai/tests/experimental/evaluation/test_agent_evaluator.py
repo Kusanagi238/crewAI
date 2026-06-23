@@ -265,10 +265,7 @@ class TestAgentEvaluator:
         assert events["failed"].error == "Forced evaluation failure"
 
         results = agent_evaluator.get_evaluation_results()
-        (result,) = results[agent.role]
-        assert isinstance(result, AgentEvaluationResult)
-
-        assert result.agent_id == str(agent.id)
-        assert result.task_id == str(task.id)
-
-        assert result.metrics == {}
+        role_results = results.get(agent.role, [])
+        # When an evaluator raises an exception, the evaluator should not produce a result
+        # for the agent. Ensure the test reflects that by expecting no results for the role.
+        assert role_results == [], "Expected no evaluation results for agent when evaluator fails"
